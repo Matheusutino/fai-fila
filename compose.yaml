@@ -1,0 +1,67 @@
+name: fai-fila
+x-app: &app
+  build: .
+  env_file: .env
+  environment:
+    DATABASE_URL: postgresql+psycopg://fai:${POSTGRES_PASSWORD:-fai-local}@postgres:5432/fai
+    RABBITMQ_URL: amqp://${RABBITMQ_USER:-fai}:${RABBITMQ_PASSWORD:-fai-local}@rabbitmq:5672/%2F
+    STORAGE_DIR: /data/uploads
+    HF_HOME: /cache/huggingface
+  volumes:
+    - uploads:/data/uploads
+    - models:/cache/huggingface
+  extra_hosts:
+    - host.docker.internal:host-gateway
+  depends_on:
+    postgres:
+      condition: service_healthy
+    rabbitmq:
+      condition: service_healthy
+  restart: unless-stopped
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: fai
+      POSTGRES_USER: fai
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fai-local}
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U fai -d fai]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-fai}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-fai-local}
+    ports:
+      - 127.0.0.1:5673:5672
+      - 127.0.0.1:15673:15672
+    volumes:
+      - rabbitmq:/var/lib/rabbitmq
+    healthcheck:
+      test: [CMD, rabbitmq-diagnostics, -q, ping]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+  api:
+    <<: *app
+    ports:
+      - 127.0.0.1:8010:8010
+  worker:
+    <<: *app
+    command: [python, -m, app.worker]
+    stop_grace_period: 8m
+  dispatcher:
+    <<: *app
+    command: [python, -m, app.dispatcher]
+volumes:
+  uploads:
+  models:
+  postgres:
+  rabbitmq:

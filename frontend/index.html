@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FAI · Conferência de recibos</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+    <script defer src="/static/app.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="FAI início"
+        >fai<span> / recibos</span></a
+      ><span id="connection" class="pill">Conferindo conexão…</span>
+    </header>
+    <main>
+      <div class="intro">
+        <p class="eyebrow">PRESTAÇÃO DE CONTAS · DEMONSTRAÇÃO</p>
+        <h1>Um recibo.<br />Uma conferência a mais.</h1>
+        <p>
+          Envie o comprovante para verificar possíveis duplicidades entre os
+          recibos já aceitos.
+        </p>
+      </div>
+      <div class="workspace">
+        <section class="panel upload-panel" aria-labelledby="upload-title">
+          <div class="section-heading">
+            <span class="step">01</span>
+            <h2 id="upload-title">Enviar recibo</h2>
+          </div>
+          <form id="upload-form">
+            <label class="dropzone" id="dropzone" for="file"
+              ><span class="upload-symbol" aria-hidden="true">↑</span
+              ><strong>Escolha ou arraste um arquivo</strong
+              ><span>PDF, JPEG ou PNG · até 10 MiB</span
+              ><input
+                id="file"
+                type="file"
+                accept="application/pdf,image/jpeg,image/png"
+            /></label>
+            <div id="selected" class="selected" hidden>
+              <img
+                id="preview"
+                alt="Prévia do recibo selecionado"
+                hidden
+              /><span id="filename"></span>
+            </div>
+            <button id="view-selected" type="button" class="text-button" hidden>
+              Visualizar arquivo selecionado
+            </button>
+            <button id="submit" type="submit" class="primary" disabled>
+              Verificar duplicidade <span aria-hidden="true">↗</span>
+            </button>
+            <p id="upload-error" class="error" role="alert"></p>
+          </form>
+          <div class="examples">
+            <label for="example">Experimente com um recibo de teste</label>
+            <div class="example-controls">
+              <select id="example">
+                <option value="">Carregando exemplos…</option></select
+              ><button id="use-example" type="button" class="secondary">
+                Usar
+              </button>
+            </div>
+            <p>
+              Documentos sintéticos, incluindo cópias e versões com alterações
+              visuais.
+            </p>
+          </div>
+          <details class="reference-library">
+            <summary>Ver PDFs originais de referência</summary>
+            <p>Recibos sintéticos usados como base da demonstração.</p>
+            <div id="reference-list">Carregando originais…</div>
+          </details>
+          <div class="note">
+            <strong>O que acontece depois?</strong>
+            <p>
+              A análise procura recibos semelhantes e compara valor, data,
+              estabelecimento e identificador. A conferência não aprova nem
+              cadastra o documento.
+            </p>
+          </div>
+        </section>
+        <section class="panel tracking-panel" aria-labelledby="tracking-title">
+          <div class="section-heading">
+            <span class="step">02</span>
+            <h2 id="tracking-title">Acompanhar análise</h2>
+          </div>
+          <div id="empty" class="empty">
+            <span aria-hidden="true">◎</span>
+            <h3>Pronto para conferir</h3>
+            <p>
+              O andamento e as evidências aparecerão aqui.<br />Você pode voltar
+              depois usando o token.
+            </p>
+          </div>
+          <div id="tracking" hidden>
+            <div class="status-line">
+              <h3 id="task-status">Aguardando</h3>
+              <span id="task-attempt"></span>
+            </div>
+            <ol class="timeline" id="timeline">
+              <li>Recebido</li>
+              <li>Extração</li>
+              <li>Busca</li>
+              <li>Comparação</li>
+              <li>Concluído</li>
+            </ol>
+            <p id="task-message" aria-live="polite"></p>
+            <button id="view-uploaded" type="button" class="text-button">
+              Visualizar arquivo enviado
+            </button>
+            <details class="token-details">
+              <summary>Token de acompanhamento</summary>
+              <code id="current-token"></code
+              ><button id="copy-token" type="button" class="text-button">
+                Copiar token
+              </button>
+            </details>
+          </div>
+          <div class="resume">
+            <label for="token-input">Retomar uma análise</label>
+            <div class="example-controls">
+              <input
+                id="token-input"
+                placeholder="Cole o token de acompanhamento"
+                autocomplete="off"
+              /><button id="resume" class="secondary" type="button">
+                Consultar
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+      <section
+        id="result"
+        class="panel result"
+        hidden
+        aria-live="polite"
+      ></section>
+      <dialog id="document-viewer" aria-labelledby="document-title">
+        <div class="viewer-heading">
+          <h2 id="document-title">Recibo original</h2>
+          <button id="close-document" type="button" class="secondary">Fechar</button>
+        </div>
+        <p><a id="open-document" target="_blank" rel="noopener">Abrir em outra aba</a></p>
+        <div id="document-content"></div>
+      </dialog>
+      <footer>
+        <span>FAI · Fundação de Apoio Institucional</span
+        ><span>Dados sintéticos para demonstração</span>
+      </footer>
+    </main>
+  </body>
+</html>

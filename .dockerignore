@@ -1,0 +1,11 @@
+.env
+.venv
+fai-elasticsearch
+var
+artifacts
+__pycache__
+.pytest_cache
+.ruff_cache
+tests
+fixtures
+.git
