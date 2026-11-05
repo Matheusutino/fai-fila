@@ -1,86 +1,105 @@
 # FAI Fila
 
-Serviço para verificar possíveis recibos duplicados em solicitações de prestação de contas. A aplicação recebe um PDF ou uma imagem, devolve um token de acompanhamento e processa a análise em segundo plano com RabbitMQ e um worker.
+Serviço que verifica se um recibo enviado em uma prestação de contas pode ser duplicado de outro já aceito.
 
-O worker usa o OCR/Docling já configurado no OpenWebUI, extrai os campos com uma LLM, busca recibos semelhantes no Elasticsearch e compara valor, data, estabelecimento e identificador. A página web permite enviar arquivos, acompanhar a tarefa e visualizar os PDFs originais da demonstração.
+A API recebe um PDF, JPEG ou PNG e devolve um token na hora. A análise roda em segundo plano, e o resultado aponta os recibos candidatos e os campos que coincidem ou divergem.
 
-## Formas de execução
+> **Estado atual:** demonstração com recibos sintéticos e regras iniciais. Ainda não há autenticação de usuários e organizações, política de retenção de arquivos nem integração com o evento real de aprovação do FAIWeb.
 
-Há dois modos de execução:
+## Como funciona
 
-| Modo | Situação | Como iniciar |
-| --- | --- | --- |
-| Python no chope | Usado e validado na demonstração | `.venv/bin/python -m scripts.dev_stack start` |
-| Docker Compose | Arquivos preparados; build e execução ainda não validados | `docker compose up --build -d` após configurar o ambiente |
+```mermaid
+flowchart LR
+    Web["Página / FAIWeb"] -->|"arquivo"| API["API FastAPI"]
+    API -->|"tarefa"| DB[("Banco")]
+    DB --> Pub["Publicador"]
+    Pub -->|"ID da tarefa"| MQ["RabbitMQ"]
+    MQ --> Worker["Worker"]
+    Worker -->|"OCR e campos"| OW["OpenWebUI"]
+    Worker -->|"candidatos"| ES[("Elasticsearch")]
+    Worker -->|"resultado"| DB
+    Web -->|"consulta pelo token"| API
+```
 
-O [Dockerfile](Dockerfile) define a imagem da aplicação. O [compose.yaml](compose.yaml) usa essa imagem para API, publicador e worker, além de iniciar PostgreSQL e RabbitMQ. **Elasticsearch e OpenWebUI são serviços externos nos dois modos.** O projeto não instala outro Docling.
+O worker obtém o texto pelo OCR/Docling do OpenWebUI, extrai os campos com uma LLM, busca recibos semelhantes no Elasticsearch e aplica regras determinísticas sobre valor, data, estabelecimento e identificador.
 
-## Acessar a demonstração no chope
+A análise termina com uma destas decisões:
 
-O ambiente já preparado utiliza `.venv`, `.env` e serviços locais. No terminal conectado ao servidor:
+| Decisão | Significado |
+| --- | --- |
+| `possible_duplicate` | Pelo menos um candidato atende às regras de suspeita |
+| `no_duplicate_found` | Nenhum dos candidatos recuperados atende às regras |
+| `inconclusive` | Faltam dados ou há conflitos que impedem concluir |
+
+Verificar não cadastra: o recibo só entra na base depois de aprovado, quando o backend do FAIWeb chama uma [rota autenticada](docs/api.md#indexar-após-aprovação).
+
+## Como executar
+
+Requisitos:
+
+- Python 3.12
+- RabbitMQ
+- Elasticsearch
+- OpenWebUI com OCR/Docling e um modelo de extração
+
+O banco padrão é SQLite, e PostgreSQL também é aceito.
 
 ```bash
-cd /exp/utinomatheus/fai-fila
+python3.12 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+.venv/bin/python -m pip install -r requirements-embeddings.txt
+cp -n .env.example .env
+```
+
+Preencha o `.env` conforme a [configuração](docs/configuracao.md). Depois, gere os exemplos, carregue a base e inicie a API, o publicador e o worker:
+
+```bash
+.venv/bin/python -m scripts.generate_corpus
+.venv/bin/python -m scripts.check_services
+.venv/bin/python -m scripts.ingest_receipts
 .venv/bin/python -m scripts.dev_stack start
-.venv/bin/python -m scripts.dev_stack status
 ```
 
-Esse comando inicia API, publicador e worker. Banco, RabbitMQ, Elasticsearch e OpenWebUI precisam estar disponíveis.
+Abra a página em <http://localhost:8010> e a documentação interativa da API em <http://localhost:8010/docs>.
 
-Em outro terminal, **no seu computador**, mantenha o túnel SSH aberto:
+Também há um [Compose](docs/docker.md) para API, publicador, worker, PostgreSQL e RabbitMQ, mas o build e a execução dos containers ainda não foram validados. Elasticsearch e OpenWebUI são externos nos dois modos.
+
+## Como usar
+
+1. Escolha um exemplo e clique em **Usar**, ou selecione um arquivo próprio.
+2. Clique em **Verificar duplicidade** e acompanhe as etapas.
+3. Confira a comparação dos campos e os candidatos encontrados.
+
+F5 limpa a página, mas a tarefa continua no servidor. Para voltar a ela, informe o token em **Retomar uma análise**.
+
+Pela API:
 
 ```bash
-ssh -N -o ExitOnForwardFailure=yes -L 8010:127.0.0.1:8010 chope
+curl --fail-with-body http://localhost:8010/api/receipt-checks -F 'file=@recibo.pdf'
+curl --fail-with-body http://localhost:8010/api/receipt-checks/TOKEN_DA_ANALISE
 ```
-
-Abra **http://localhost:8010**. A documentação interativa da API fica em **http://localhost:8010/docs**.
-
-Para preparar outro ambiente, consultar logs ou recuperar uma dependência, siga o [guia de execução](docs/execucao.md).
-
-## Experimentar
-
-1. Escolha um exemplo de teste na página e clique em **Usar**, ou envie seu arquivo PDF, JPEG ou PNG.
-2. Clique em **Verificar duplicidade** e acompanhe as etapas da tarefa.
-3. Confira a comparação dos campos e abra os PDFs originais dos candidatos de demonstração.
-
-Os resultados possíveis são **possível duplicidade**, **nenhuma duplicidade encontrada** e **análise inconclusiva**. A conclusão considera somente os candidatos recuperados da base.
-
-**F5 limpa a página.** Para consultar uma análise anterior, guarde o token e informe-o em **Retomar uma análise**.
 
 ## Documentação
 
 | Quero… | Guia |
 | --- | --- |
-| Executar em Python ou acessar pelo SSH | [Execução](docs/execucao.md) |
-| Entender e executar os containers | [Docker](docs/docker.md) |
+| Executar em Python, ver logs e resolver problemas | [Execução](docs/execucao.md) |
+| Executar com containers | [Docker](docs/docker.md) |
 | Preencher o `.env` | [Configuração](docs/configuracao.md) |
-| Entender a fila, o RAG e as regras | [Arquitetura](docs/arquitetura.md) |
-| Integrar o FAIWeb à API | [API](docs/api.md) |
-| Gerar documentos e repetir os testes | [Testes e exemplos](docs/testes.md) |
+| Entender a fila, a busca e as regras | [Arquitetura](docs/arquitetura.md) |
+| Integrar o FAIWeb | [API](docs/api.md) |
+| Gerar exemplos e rodar os testes | [Testes e exemplos](docs/testes.md) |
 | Conferir o que foi validado | [Validação](docs/VALIDACAO.md) |
+| Subir ou recuperar a demonstração no servidor chope | [Ambiente do chope](docs/ambiente-chope.md) |
 
-O [índice de docs](docs/README.md) reúne todos os guias.
-
-## Onde estão os arquivos
+## Estrutura
 
 ```text
-app/                     API, persistência, fila, worker e integrações
-frontend/                Página HTML, CSS e JavaScript
-scripts/                 Execução local, geração de exemplos e avaliação
-fixtures/reference/      3 PDFs originais usados como base
-fixtures/queries/        16 arquivos de teste, incluindo cópias e alterações
-fixtures/manifest.json   Relação dos exemplos e gabarito
-var/uploads/             Arquivos enviados na execução local
-artifacts/               Capturas dos testes de navegador
-tests/                   Testes automatizados
-docs/                    Documentação do serviço
-fai-elasticsearch/       Projeto original usado como referência
+app/        API, persistência, fila, worker, pipeline e regras
+frontend/   Página em HTML, CSS e JavaScript
+scripts/    Execução local, geração de exemplos, carga e avaliação
+tests/      Testes automatizados
+docs/       Guias do serviço
+fixtures/   Recibos sintéticos e gabarito, gerados localmente
 ```
-
-Os recibos de teste, relatórios e capturas são gerados localmente e não são versionados. A pasta `fai-elasticsearch/` contém o projeto de referência; ela não precisa ser executada para iniciar este serviço.
-
-## Verificação e cadastro são etapas diferentes
-
-O upload verifica duplicidade e guarda a tarefa, mas **não adiciona o recibo ao índice de referências**. Depois de aprovar o recibo, o backend do FAIWeb deve chamar uma rota autenticada que agenda sua indexação. Assim, um envio futuro pode detectar o reuso do documento.
-
-A demonstração já oferece essa rota e um teste do ciclo completo. A integração com o evento real de aprovação do FAIWeb ainda precisa ser feita. As regras e os documentos sintéticos servem para demonstrar a arquitetura; a aplicação ainda não inclui autenticação de usuários e organizações nem política de retenção dos arquivos.

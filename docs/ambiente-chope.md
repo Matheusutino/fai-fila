@@ -1,6 +1,27 @@
-# Dependências locais da demonstração no chope
+# Demonstração no servidor chope
 
-Este guia é específico do ambiente em `/exp/utinomatheus/fai-fila`. Para o uso normal, siga [Execução](execucao.md); para uma instalação nova, use as instruções de Python ou [Docker](docker.md).
+Este guia é específico do ambiente em `/exp/utinomatheus/fai-fila`. Para uma instalação nova, use as instruções de [Python](execucao.md#instalação-em-outro-ambiente) ou [Docker](docker.md).
+
+## Iniciar e acessar
+
+O ambiente já tem `.venv`, `.env` e os recibos de referência preparados. Conecte-se ao servidor e inicie API, publicador e worker:
+
+```bash
+ssh chope
+cd /exp/utinomatheus/fai-fila
+.venv/bin/python -m scripts.dev_stack start
+.venv/bin/python -m scripts.dev_stack status
+```
+
+O comando não inicia banco, RabbitMQ, Elasticsearch nem OpenWebUI, que precisam estar disponíveis. Se o banco ou a fila estiverem parados, veja [Diagnosticar antes de reiniciar](#diagnosticar-antes-de-reiniciar).
+
+Em outro terminal, **no seu computador**, mantenha o túnel SSH aberto:
+
+```bash
+ssh -N -o ExitOnForwardFailure=yes -L 8010:127.0.0.1:8010 chope
+```
+
+Abra <http://localhost:8010> para usar a página e <http://localhost:8010/docs> para ver a documentação interativa da API. Se a porta 8010 estiver ocupada ou você precisar de logs e parada, consulte [Execução](execucao.md#abrir-no-seu-navegador).
 
 ## Como o ambiente foi preparado
 
